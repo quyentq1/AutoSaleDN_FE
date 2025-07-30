@@ -38,28 +38,29 @@ export default function PrePurchasePage() {
   const [paymentMethod, setPaymentMethod] = useState(''); // for full purchase
   const [depositPaymentMethod, setDepositPaymentMethod] = useState(''); // for deposit
 
-  // New states for deposit and purchase type logic
+  // States for deposit and purchase type logic
   const [isDepositPaid, setIsDepositPaid] = useState(false);
   const [deliveryDate, setDeliveryDate] = useState(''); // For agreed delivery date
   const [paymentDueDate, setPaymentDueDate] = useState(''); // For calculated payment due date
-  const [isProcessingDeposit, setIsProcessingDeposit] = useState(false); // New state for deposit button loading
-  const [isProcessingFullPayment, setIsProcessingFullPayment] = useState(false); // New state for full payment button loading
-  const [purchaseType, setPurchaseType] = useState('deposit'); // 'deposit' or 'full_payment' - Default to deposit
+  const [isProcessingDeposit, setIsProcessingDeposit] = useState(false); // For deposit button loading
+  const [isProcessingFullPayment, setIsProcessingFullPayment] = useState(false); // For full payment button loading
+  const [isProcessingGateway, setIsProcessingGateway] = useState(false); // For payment gateway redirect loading
+  const [purchaseType, setPurchaseType] = useState('deposit'); // 'deposit' or 'full_payment'
 
   // State to store the orderId after deposit is placed
   const [currentOrderId, setCurrentOrderId] = useState(null);
 
-  // New state for the contract viewing modal
+  // State for the contract viewing modal
   const [contractModal, setContractModal] = useState({ open: false, content: '' });
 
-  const DEPOSIT_PERCENT = 0.3; // Changed to 30% as per user's prompt
-  const MIN_DEPOSIT = 10000000; // Minimum deposit amount in VND
+  const DEPOSIT_PERCENT = 0.3; // 30% deposit
+  const MIN_DEPOSIT = 10; // Minimum deposit amount in VND
   const SHIPPING_COST = 3500000; // Shipping cost in VND
 
   const getToken = () => localStorage.getItem('token');
 
   // Effect to fetch car and showroom information if not already in state
-  useEffect(() => {
+ useEffect(() => {
     if (!carFromState || initialShowrooms.length === 0) {
         const fetchCarAndShowrooms = async () => {
             setLoadingUser(true);
@@ -70,11 +71,12 @@ export default function PrePurchasePage() {
                     throw new Error(`Failed to fetch car data: ${response.statusText}`);
                 }
                 const carData = await response.json();
-
+                
                 let taxRateValue = 0.085;
                 if (carData.pricing && carData.pricing[0] && typeof carData.pricing[0].taxRate === 'number') {
-                    taxRateValue = carData.pricing[0].taxRate / 100; // Convert percentage if needed
+                    taxRateValue = carData.pricing[0].taxRate / 100;
                 }
+                
                 const mappedCar = {
                     id: carData.listingId,
                     model: {
@@ -87,23 +89,24 @@ export default function PrePurchasePage() {
                     pricing: carData.pricing?.[0]
                         ? {
                             registrationFee: carData.pricing[0].registrationFee || 0,
-                            dealerFee: 500, // Assuming a fixed dealer fee
+                            dealerFee: 500,
                             taxRate: taxRateValue
                         }
                         : { registrationFee: 0, dealerFee: 500, taxRate: 0.085 },
                     showrooms: carData.showrooms?.map(s => ({
-                      id: s.storeLocationId,
-                      name: s.name,
-                      address: s.address,
-                      phone: s.Phone || "+1 (555) 123-4567" // Placeholder phone
+                        id: s.storeLocationId,
+                        name: s.name,
+                        address: s.address,
+                        phone: s.Phone || "+1 (555) 123-4567"
                     })) || [],
-                    sellerInfo: carData.sellerInfo || { name: "Auto Sales Inc.", contact: "sales@autosales.com" }, // Placeholder seller info
-                    vin: carData.vin // Include VIN for contract
+                    sellerInfo: carData.sellerInfo || { name: "Auto Sales Inc.", contact: "sales@autosales.com" },
+                    vin: carData.vin
                 };
+                
                 setCar(mappedCar);
                 setShowrooms(mappedCar.showrooms);
                 if (mappedCar.showrooms.length > 0) {
-                  setSelectedShowroom(String(mappedCar.showrooms[0].id)); // Automatically select the first showroom if available
+                    setSelectedShowroom(String(mappedCar.showrooms[0].id));
                 }
             } catch (err) {
                 setErrorUser('Failed to load car and showroom information. ' + err.message);
@@ -115,13 +118,14 @@ export default function PrePurchasePage() {
         fetchCarAndShowrooms();
     } else {
         setCar(carFromState);
-        setShowrooms(initialShowrooms); // Ensure showrooms are also set if carFromState is used
-        if (initialShowrooms.length > 0 && !selectedShowroom) { // Set initial showroom if not already set
+        setShowrooms(initialShowrooms);
+        if (initialShowrooms.length > 0 && !selectedShowroom) {
             setSelectedShowroom(String(initialShowrooms[0].id));
         }
         setLoadingUser(false);
     }
-  }, [carId, initialShowrooms, carFromState, selectedShowroom]);
+}, [carId]); 
+
 
   // Fetch user data
   useEffect(() => {
@@ -136,7 +140,7 @@ export default function PrePurchasePage() {
                     headers['Authorization'] = `Bearer ${token}`;
                 }
 
-                const response = await fetch("/api/User/me", { headers }); // Changed to customer profile
+                const response = await fetch("/api/User/me", { headers });
                 if (!response.ok) {
                     if (response.status === 401) {
                         throw new Error('Authentication failed. Please log in again.');
@@ -200,6 +204,162 @@ export default function PrePurchasePage() {
     }
   }, [selectedShowroom]);
 
+ useEffect(() => {
+  console.log("--- useEffect for Momo callback initiated ---");
+  const query = new URLSearchParams(location.search);
+
+  const momopartnerCode = query.get('partnerCode');
+  const momoOrderId = query.get('orderId');
+  const momoExtraData = query.get('extraData');
+  const momorequestId = query.get('requestId');
+  const momoResultCode = query.get('errorCode');
+  const momoAmount = query.get('amount');
+  const momoTransId = query.get('transId');
+  const momoOrderInfo = query.get('orderInfo');
+  const momoOrderType = query.get('orderType');
+  const momoMessage = query.get('message');
+  const momoLocalMessage = query.get('localMessage');
+  const momoResponseTime = query.get('responseTime');
+  const momoPayType = query.get('payType');
+  const momoSignature = query.get('signature');
+  const momoAccessKey = query.get('accessKey');
+
+  if (momoResultCode !== null) {
+    console.log("--- Momo callback parameters detected, processing... ---");
+    setIsProcessingGateway(true);
+
+    if (momoResultCode === "0") {
+      console.log("Momo Payment SUCCESS! Sending data to server...");
+
+      const payload = {
+        partnerCode: momopartnerCode,
+        orderId: momoOrderId,
+        extraData: momoExtraData,
+        requestId: momorequestId,
+        resultCode: momoResultCode,
+        amount: momoAmount,
+        transId: momoTransId,
+        orderInfo: momoOrderInfo,
+        orderType: momoOrderType,
+        message: momoMessage,
+        localMessage: momoLocalMessage,
+        responseTime: momoResponseTime,
+        payType: momoPayType,
+        signature: momoSignature,
+        accessKey: momoAccessKey
+      };
+
+      fetch('/api/Momo/momo_ipn', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        })
+          .then(res => {
+            if (!res.ok) {
+              // If the server returns an HTTP error, throw an exception to be caught by .catch
+              return res.json().then(err => { throw new Error(err.message || 'Server error occurred'); });
+            }
+            return res.json();
+          })
+          .then(data => {
+            console.log("✅ Data sent successfully:", data);
+
+            // Check the resultCode from your server's response
+            if (data.resultCode === "0") {
+                // Attempt to determine payment purpose from extraData
+                let paymentPurposeText = "payment";
+                if (momoExtraData) {
+                    try {
+                        const decodedExtraData = atob(momoExtraData); // Decode Base64
+                        const parts = decodedExtraData.split('|');
+                        if (parts.length > 1) {
+                            paymentPurposeText = parts[1] === "deposit" ? "deposit" : "full payment";
+                        }
+                    } catch (e) {
+                        console.error("Error decoding extraData:", e);
+                    }
+                }
+
+                Swal.fire({
+                    icon: "success",
+                    title: "Payment Successful!",
+                    html: `Your ${paymentPurposeText} has been processed successfully.<br/>Please check your email; we've sent the detailed invoice there.`,
+                    confirmButtonText: "Complete",
+                    confirmButtonColor: "#10B981", // Green color
+                }).then(() => {
+                    // Redirect the user after they click "Complete"
+                    if (carId) {
+                        navigate(`/cars/orders`, { replace: true });
+                    } else {
+                        navigate('/some-success-page', { replace: true }); // Or a generic success page
+                    }
+                });
+            } else {
+                // Case where MoMo reported success but your server validation failed
+                Swal.fire({
+                    icon: "error",
+                    title: "Payment Verification Failed!",
+                    text: `There was an issue verifying your payment on our system. Please contact support. (Error Code: ${data.resultCode})`,
+                    confirmButtonText: "Try Again",
+                    confirmButtonColor: "#EF4444",
+                }).then(() => {
+                    if (carId) {
+                        navigate(`/cars/${carId}/confirm-orders}`, { replace: true });
+                    } else {
+                        navigate('/some-error-page', { replace: true });
+                    }
+                });
+            }
+          })
+          .catch(error => {
+            console.error("❌ Failed to send data to /api/Momo/momo_ipn:", error);
+            Swal.fire({
+              icon: "error",
+              title: "Connection Error!",
+              text: `Could not connect to the server to verify your payment. Please try again or contact support.`,
+              confirmButtonText: "Try Again",
+              confirmButtonColor: "#EF4444",
+            }).then(() => {
+              if (carId) {
+                navigate(`/cars/${carId}/confirm-orders`, { replace: true });
+              } else {
+                navigate('/some-error-page', { replace: true });
+              }
+            });
+          })
+          .finally(() => {
+            setIsProcessingGateway(false); // Stop loading indicator
+            console.log("--- useEffect for Momo callback finished ---");
+          });
+
+      } else {
+        // MoMo reported payment failure
+        console.log(`Momo Payment FAILED! Result Code: ${momoResultCode}, Message: ${momoMessage}`);
+        Swal.fire({
+          icon: "error",
+          title: "Payment Failed!",
+          text: `Your transaction could not be completed. Reason: ${momoMessage || 'Unknown error.'} (MoMo Code: ${momoResultCode})`,
+          confirmButtonText: "Try Again",
+          confirmButtonColor: "#EF4444",
+        }).then(() => {
+          console.log(`Navigating back to /cars/${carId} after payment failure.`);
+          if (carId) {
+            navigate(`/cars/${carId}/confirm-orders`, { replace: true });
+          } else {
+            navigate('/some-failure-page', { replace: true }); // Or a generic failure page
+          }
+        });
+        setIsProcessingGateway(false); // Stop loading indicator
+        console.log("--- useEffect for Momo callback finished ---");
+      }
+
+    } else {
+      console.log("No MoMo callback parameters (errorCode) found in URL. Skipping MoMo callback processing.");
+    }
+  }, [location.search, navigate, carId]);
+
   // Calculate total price for display
   const calculateTotalPrice = () => {
     if (!car) return 0;
@@ -214,63 +374,122 @@ export default function PrePurchasePage() {
   const depositAmount = Math.max(MIN_DEPOSIT, Math.round(calculateTotalPrice() * DEPOSIT_PERCENT));
   const remainingBalance = calculateTotalPrice() - depositAmount;
 
-  // Handle Deposit
-  const handleDeposit = async () => {
-    if (!car) {
-      Swal.fire({
-        icon: 'error',
-        title: 'Missing Car Data',
-        text: 'Car details are not loaded. Please try again.',
-        confirmButtonText: 'OK',
-      });
-      return;
-    }
-    if (!selectedShowroom) {
-      Swal.fire({
-        icon: 'warning',
-        title: 'Showroom Required',
-        text: 'Please select a showroom.',
-        confirmButtonText: 'OK',
-      });
-      return;
-    }
-    if (!depositPaymentMethod) {
-      Swal.fire({
-        icon: 'warning',
-        title: 'Deposit Payment Method Required',
-        text: 'Please select a method to pay the deposit.',
-        confirmButtonText: 'OK',
-      });
-      return;
-    }
-    if (deliveryOption === 'shipping' && !useUserProfileAddress) {
-      if (!shippingAddressInfo.name || !shippingAddressInfo.address || !shippingAddressInfo.phone) {
-        Swal.fire({
-          icon: 'warning',
-          title: 'Shipping Information Incomplete',
-          text: 'Please fill in all shipping address details.',
-          confirmButtonText: 'OK',
-        });
-        return;
-      }
-    }
-
-    setIsProcessingDeposit(true); // Start loading state for deposit button
-
+  // Function to initiate Momo payment
+  const initiateMomoPayment = async (saleId, amount, purpose) => {
+    setIsProcessingGateway(true);
     try {
       const token = getToken();
       const payload = {
-        listingId: car.id,
-        totalPrice: calculateTotalPrice(),
-        depositAmount: depositAmount,
-        deliveryOption: deliveryOption,
-        selectedShowroomId: deliveryOption === 'pickup' ? Number(selectedShowroom) : null, // Only send if pickup
-        useUserProfileAddress: deliveryOption === 'shipping' ? useUserProfileAddress : false,
-        shippingAddressInfo: deliveryOption === 'shipping' && !useUserProfileAddress ? shippingAddressInfo : null,
-        depositPaymentMethod: depositPaymentMethod,
-        expectedDeliveryDate: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString(), // 30 days from now
+        saleId: saleId,
+        amount: amount,
+        paymentPurpose: purpose,
+        returnUrl: window.location.origin + window.location.pathname + window.location.search,
       };
 
+      const response = await fetch('/api/Momo/create_payment_url', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to get Momo URL from server.');
+      }
+
+      const data = await response.json();
+      window.location.href = data.payUrl;
+    } catch (err) {
+      setIsProcessingGateway(false);
+      await Swal.fire({
+        icon: "error",
+        title: "Momo Initiation Failed",
+        text: `Unable to initiate Momo payment: ${err.message}`,
+        confirmButtonText: "Try Again",
+        confirmButtonColor: "#EF4444",
+      });
+    }
+  };
+
+  // Handle Deposit
+  const handleDeposit = async () => {
+    if (!car) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Missing Car Data',
+      text: 'Car details are not loaded. Please try again.',
+      confirmButtonText: 'OK',
+    });
+    return;
+  }
+  if (!selectedShowroom) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Showroom Required',
+      text: 'Please select a showroom.',
+      confirmButtonText: 'OK',
+    });
+    return;
+  }
+  if (!depositPaymentMethod) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Deposit Payment Method Required',
+      text: 'Please select a method to pay the deposit.',
+      confirmButtonText: 'OK',
+    });
+    return;
+  }
+  if (deliveryOption === 'shipping' && !useUserProfileAddress) {
+    if (!shippingAddressInfo.name || !shippingAddressInfo.address || !shippingAddressInfo.phone) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Shipping Information Incomplete',
+        text: 'Please fill in all shipping address details.',
+        confirmButtonText: 'OK',
+      });
+      return;
+    }
+  }
+
+  setIsProcessingDeposit(true);
+
+  try {
+    const token = getToken();
+    const payload = {
+      listingId: car.id,
+      totalPrice: calculateTotalPrice(),
+      depositAmount: depositAmount,
+      deliveryOption: deliveryOption,
+      selectedShowroomId: deliveryOption === 'pickup' ? Number(selectedShowroom) : null,
+      useUserProfileAddress: deliveryOption === 'shipping' ? useUserProfileAddress : false,
+      shippingAddressInfo: deliveryOption === 'shipping' && !useUserProfileAddress ? shippingAddressInfo : null,
+      depositPaymentMethod: depositPaymentMethod,
+      expectedDeliveryDate: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString(),
+    };
+
+    if (depositPaymentMethod === 'e_wallet_momo_test') {
+      const createOrderResponse = await fetch('/api/Customer/orders/deposit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ ...payload, depositPaymentMethod: depositPaymentMethod })
+      });
+
+      if (!createOrderResponse.ok) {
+        const errorData = await createOrderResponse.json();
+        throw new Error(errorData.message || 'Failed to create pending deposit order.');
+      }
+      const orderConfirmation = await createOrderResponse.json();
+      setCurrentOrderId(orderConfirmation.orderId);
+
+      await initiateMomoPayment(orderConfirmation.orderId, depositAmount, 'deposit');
+    } else {
       const response = await fetch('/api/Customer/orders/deposit', {
         method: 'POST',
         headers: {
@@ -285,12 +504,10 @@ export default function PrePurchasePage() {
         throw new Error(errorData.message || 'Failed to process deposit on server.');
       }
 
-      const depositConfirmation = await response.json(); // Get confirmation data
+      const depositConfirmation = await response.json();
+      setIsDepositPaid(true);
+      setCurrentOrderId(depositConfirmation.orderId);
 
-      setIsDepositPaid(true); // Mark deposit as paid after successful API call
-      setCurrentOrderId(depositConfirmation.orderId); // Store the order ID
-
-      // Set delivery date and payment due date from API response or calculated if not provided
       const apiExpectedDeliveryDate = depositConfirmation.expectedDeliveryDate ? new Date(depositConfirmation.expectedDeliveryDate) : new Date(new Date().setDate(new Date().getDate() + 30));
       setDeliveryDate(apiExpectedDeliveryDate.toISOString().split('T')[0]);
 
@@ -300,89 +517,98 @@ export default function PrePurchasePage() {
 
       await Swal.fire({
         icon: "success",
-        title: "Deposit Placed!",
+        title: "Deposit Payment Successful!",
         html: `
-          <p>Your deposit of <strong>${formatCurrency(depositAmount)}</strong> has been placed successfully.</p>
-          <p class="mt-2 text-sm text-gray-600">Our sales team will contact you soon to complete the purchase contract and full payment.</p>
-          <p class="mt-1 text-sm text-gray-600">Your vehicle is scheduled for delivery on: <strong>${apiExpectedDeliveryDate.toLocaleDateString('en-US')}</strong></p>
+          <p>Your deposit of <strong>${formatCurrency(depositAmount)}</strong> has been successfully processed.</p>
+          <p class="mt-2 text-sm text-gray-600">A confirmation email has been sent to your email address. Please check your inbox (and spam/junk folder).</p>
+          <p class="mt-1 text-sm text-gray-600">Our sales team will contact you soon to complete the purchase contract and full payment.</p>
+          <p class="mt-1 text-sm text-gray-600">Vehicle delivery is scheduled for: <strong>${apiExpectedDeliveryDate.toLocaleDateString('en-US')}</strong></p>
           <p class="mt-1 text-sm text-gray-600">Full payment is due by: <strong>${calculatedPaymentDueDate.toLocaleDateString('en-US')}</strong></p>
         `,
         confirmButtonText: "OK",
         confirmButtonColor: "#10B981",
+      }).then((result) => {
+        if (result.isConfirmed) {
+          navigate('/orders');
+        }
       });
-
-    } catch (err) {
-      await Swal.fire({
-        icon: "error",
-        title: "Deposit Failed",
-        text: `Unable to process deposit: ${err.message}`,
-        confirmButtonText: "Try Again",
-        confirmButtonColor: "#EF4444",
-      });
-    } finally {
-      setIsProcessingDeposit(false); // End loading state
     }
-  };
+  } catch (err) {
+    await Swal.fire({
+      icon: "error",
+      title: "Deposit Failed",
+      text: `Unable to process deposit: ${err.message}`,
+      confirmButtonText: "OK",
+      confirmButtonColor: "#EF4444",
+    });
+  } finally {
+    setIsProcessingDeposit(false);
+  }
+};
 
   // Handle Full Payment
   const handleFullPayment = async () => {
-    // If purchaseType is 'deposit', then deposit must be paid and orderId must exist
     if (purchaseType === 'deposit' && (!isDepositPaid || !currentOrderId)) {
-      Swal.fire({
-        icon: 'warning',
-        title: 'Deposit Required',
-        text: 'Please place the deposit first before making the full payment.',
-        confirmButtonText: 'OK',
-      });
-      return;
+    Swal.fire({
+      icon: 'warning',
+      title: 'Deposit Required',
+      text: 'Please place the deposit first before making the full payment.',
+      confirmButtonText: 'OK',
+    });
+    return;
+  }
+
+  if (!deliveryDate) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Delivery Date Required',
+      text: 'Delivery date is not set. Please place a deposit first or select full payment option.',
+      confirmButtonText: 'OK',
+    });
+    return;
+  }
+
+  if (!paymentMethod) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Full Payment Method Required',
+      text: 'Please select a payment method for the full order.',
+      confirmButtonText: 'OK',
+    });
+    return;
+  }
+
+  setIsProcessingFullPayment(true);
+
+  let deliveryDetails = '';
+  const currentShowroom = showrooms.find(sr => String(sr.id) === String(selectedShowroom));
+
+  if (deliveryOption === 'pickup') {
+    deliveryDetails = `Pick up at Showroom: ${currentShowroom?.name || 'N/A'} at ${currentShowroom?.address || 'N/A'}`;
+  } else {
+    const finalShippingAddress = useUserProfileAddress
+      ? `${userData?.address || 'N/A'}, ${userData?.city || 'N/A'}, ${userData?.province || 'N/A'}`
+      : `${shippingAddressInfo.address}, Phone: ${shippingAddressInfo.phone}, Recipient: ${shippingAddressInfo.name}`;
+    deliveryDetails = `Ship to: ${finalShippingAddress}`;
+  }
+
+  try {
+    const token = getToken();
+    const orderIdToUse = currentOrderId || location.state?.orderId;
+
+    if (!orderIdToUse) {
+      throw new Error("Order ID is missing. Cannot process full payment.");
     }
 
-    if (!deliveryDate) {
-      Swal.fire({
-        icon: 'warning',
-        title: 'Delivery Date Required',
-        text: 'Delivery date is not set. Please place a deposit first.',
-        confirmButtonText: 'OK',
-      });
-      return;
-    }
+    const amountToPay = purchaseType === 'deposit' ? remainingBalance : calculateTotalPrice();
 
-    if (!paymentMethod) {
-        Swal.fire({
-          icon: 'warning',
-          title: 'Full Payment Method Required',
-          text: 'Please select a payment method for the full order.',
-          confirmButtonText: 'OK',
-        });
-        return;
-    }
-
-    setIsProcessingFullPayment(true); // Start loading state for full payment button
-
-    let deliveryDetails = '';
-    const currentShowroom = showrooms.find(sr => String(sr.id) === String(selectedShowroom));
-
-    if (deliveryOption === 'pickup') {
-      deliveryDetails = `Pick up at Showroom: ${currentShowroom?.name || 'N/A'} at ${currentShowroom?.address || 'N/A'}`;
-    } else { // shipping
-      const finalShippingAddress = useUserProfileAddress
-        ? `${userData?.address || 'N/A'}, ${userData?.city || 'N/A'}, ${userData?.province || 'N/A'}`
-        : `${shippingAddressInfo.address}, Phone: ${shippingAddressInfo.phone}, Recipient: ${shippingAddressInfo.name}`;
-      deliveryDetails = `Ship to: ${finalShippingAddress}`;
-    }
-
-    try {
-      const token = getToken();
+    if (paymentMethod === 'e_wallet_momo_test') {
+      await initiateMomoPayment(orderIdToUse, amountToPay, 'full_payment');
+    } else {
       const payload = {
         paymentMethod: paymentMethod,
-        actualDeliveryDate: deliveryDate, // Using the expected delivery date as actual for now
+        actualDeliveryDate: deliveryDate,
       };
-
-      const orderIdToUse = currentOrderId || location.state?.orderId; // Use currentOrderId or from state if coming from a partially completed order
-
-      if (!orderIdToUse) {
-        throw new Error("Order ID is missing. Cannot process full payment.");
-      }
 
       const response = await fetch(`/api/Customer/orders/${orderIdToUse}/full-payment`, {
         method: 'POST',
@@ -401,34 +627,37 @@ export default function PrePurchasePage() {
       const fullPaymentConfirmation = await response.json();
 
       await Swal.fire({
-          icon: "success",
-          title: "Purchase Complete!",
-          html: `
-              <p>Thank you for your purchase! Your full payment has been processed.</p>
-              <p class="mt-2 text-sm text-gray-600"><strong>Total Amount Paid:</strong> ${formatCurrency(calculateTotalPrice())}</p>
-              <p class="mt-1 text-sm text-gray-600"><strong>Delivery Date:</strong> ${new Date(deliveryDate).toLocaleDateString('en-US')}</p>
-              <p class="mt-1 text-sm text-gray-600"><strong>Delivery Method:</strong> ${deliveryDetails}</p>
-              <p class="mt-1 text-sm text-gray-600"><strong>Full Payment Method:</strong> ${paymentMethod.replace(/_/g, ' ').toUpperCase()}</p>
-              <p class="mt-2 text-base text-blue-700 font-semibold">Your car will be delivered on the scheduled date!</p>
-              <p class="mt-4 text-sm text-green-700 font-semibold">A copy of the contract has been sent to your email address (simulated).</p>
-          `,
-          confirmButtonText: "Excellent!",
-          confirmButtonColor: "#10B981",
+        icon: "success",
+        title: "Purchase Complete!",
+        html: `
+          <p>Thank you for your purchase! Your full payment has been processed.</p>
+          <p class="mt-2 text-sm text-gray-600"><strong>Total Amount Paid:</strong> ${formatCurrency(calculateTotalPrice())}</p>
+          <p class="mt-1 text-sm text-gray-600"><strong>Delivery Date:</strong> ${new Date(deliveryDate).toLocaleDateString('en-US')}</p>
+          <p class="mt-1 text-sm text-gray-600"><strong>Delivery Method:</strong> ${deliveryDetails}</p>
+          <p class="mt-1 text-sm text-gray-600"><strong>Full Payment Method:</strong> ${paymentMethod.replace(/_/g, ' ').toUpperCase()}</p>
+          <p class="mt-2 text-sm text-gray-600">A confirmation email has been sent to your email address. Please check your inbox (and spam/junk folder).</p>
+          <p class="mt-2 text-base text-blue-700 font-semibold">Your car will be delivered on the scheduled date!</p>
+        `,
+        confirmButtonText: "OK",
+        confirmButtonColor: "#10B981",
+      }).then((result) => {
+        if (result.isConfirmed) {
+          navigate('/orders');
+        }
       });
-      navigate(`/cars/${car.id}`); // Redirect after successful full payment
-    } catch (err) {
-        await Swal.fire({
-            icon: "error",
-            title: "Full Payment Failed",
-            text: `Unable to process full payment: ${err.message}`,
-            confirmButtonText: "Try Again",
-            confirmButtonColor: "#EF4444",
-        });
-    } finally {
-      setIsProcessingFullPayment(false); // End loading state
     }
-  };
-
+  } catch (err) {
+    await Swal.fire({
+      icon: "error",
+      title: "Full Payment Failed",
+      text: `Unable to process full payment: ${err.message}`,
+      confirmButtonText: "Try Again",
+      confirmButtonColor: "#EF4444",
+    });
+  } finally {
+    setIsProcessingFullPayment(false);
+  }
+}
 
   const handleShowroomChange = (e) => {
     setSelectedShowroom(e.target.value);
@@ -451,7 +680,6 @@ export default function PrePurchasePage() {
     setDepositPaymentMethod(e.target.value);
   };
 
-  // This function now generates the content as a string
   const generateContractContent = () => {
     const currentShowroom = showrooms.find(sr => String(sr.id) === String(selectedShowroom));
     const deliveryAddress = deliveryOption === 'shipping'
@@ -464,16 +692,14 @@ export default function PrePurchasePage() {
     const currentDeliveryDate = deliveryDate ? new Date(deliveryDate).toLocaleDateString('en-US') : 'Not yet determined';
     const currentPaymentDueDate = paymentDueDate ? new Date(paymentDueDate).toLocaleDateString('en-US') : 'Not yet determined';
 
-    // Conditionally add delivery and pickup lines
     let deliverySection = '';
-    if (deliveryAddress !== 'N/A' && deliveryOption === 'shipping') { // Only show delivery address if shipping
+    if (deliveryAddress !== 'N/A' && deliveryOption === 'shipping') {
         deliverySection += `Delivery will be arranged to: ${deliveryAddress}\n`;
     }
-    if (pickupLocation !== 'N/A' && deliveryOption === 'pickup') { // Only show pickup location if pickup
+    if (pickupLocation !== 'N/A' && deliveryOption === 'pickup') {
         deliverySection += `Pickup/Sale Location: ${pickupLocation}\n`;
     }
     deliverySection += `Expected Delivery Date: ${currentDeliveryDate}`;
-
 
     return `
       VEHICLE PURCHASE AGREEMENT
@@ -532,7 +758,6 @@ export default function PrePurchasePage() {
     `;
   };
 
-  // Renamed from handleContractDownload to handleViewContract
   const handleViewContract = () => {
     const content = generateContractContent();
     setContractModal({ open: true, content: content });
@@ -540,21 +765,21 @@ export default function PrePurchasePage() {
 
   const handlePurchaseTypeChange = (e) => {
     setPurchaseType(e.target.value);
-    // Reset payment methods and deposit status when changing purchase type
     setPaymentMethod('');
     setDepositPaymentMethod('');
     setIsDepositPaid(false);
-    setDeliveryDate(''); // Reset delivery date as well
-    setPaymentDueDate(''); // Reset payment due date
-    setCurrentOrderId(null); // Clear order ID if changing purchase type
+    setDeliveryDate('');
+    setPaymentDueDate('');
+    setCurrentOrderId(null);
   };
 
-
-  if (loadingUser || !car) {
+  if (loadingUser || !car || isProcessingGateway) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
         <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-600 border-opacity-75"></div>
-        <p className="ml-4 text-gray-700">Loading car details and user info...</p>
+        <p className="ml-4 text-gray-700">
+          {isProcessingGateway ? 'Redirecting to payment gateway or verifying payment...' : 'Loading car details and user info...'}
+        </p>
       </div>
     );
   }
@@ -640,7 +865,6 @@ export default function PrePurchasePage() {
               </div>
             ) : (
               <div className="space-y-6">
-                 {/* Showroom Selection - always mandatory */}
                  <div className="space-y-4 bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm">
                     <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
                         <svg className="w-6 h-6 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -675,8 +899,6 @@ export default function PrePurchasePage() {
                     )}
                  </div>
 
-
-                 {/* Delivery Options */}
                  <div className="space-y-4 bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm">
                     <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
                         <svg className="w-6 h-6 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -734,7 +956,7 @@ export default function PrePurchasePage() {
                                         className="h-5 w-5 text-blue-600 border-gray-300 focus:ring-blue-500"
                                     />
                                     <span className="ml-3">Ship to a different address</span>
-                                &</label>
+                                </label>
                             </div>
 
                             {useUserProfileAddress ? (
@@ -792,9 +1014,7 @@ export default function PrePurchasePage() {
                     )}
                  </div>
 
-                {/* Two Column Layout for User and Seller Info */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* User Information Card */}
                   {userData && (
                     <div className="bg-gradient-to-br from-gray-50 to-blue-50/50 p-4 rounded-xl border border-gray-200/50 shadow-inner">
                       <div className="flex items-center mb-3">
@@ -851,7 +1071,6 @@ export default function PrePurchasePage() {
                     </div>
                   )}
 
-                  {/* Seller Information Card */}
                   {selectedShowroom && sellerData && (
                     <div className="bg-gradient-to-br from-blue-50 to-purple-50/50 p-4 rounded-xl border border-blue-200/50 shadow-inner">
                       <div className="flex items-center mb-3">
@@ -909,7 +1128,6 @@ export default function PrePurchasePage() {
               </div>
             )}
 
-            {/* Purchase Type Selection */}
             <div className="space-y-4 bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm mt-6">
                 <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
                     <svg className="w-6 h-6 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -943,7 +1161,6 @@ export default function PrePurchasePage() {
                 </div>
             </div>
 
-            {/* Conditional Rendering for Deposit or Full Payment Sections */}
             {purchaseType === 'deposit' && (
                 <div className="space-y-4 bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm mt-6">
                     <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
@@ -977,12 +1194,12 @@ export default function PrePurchasePage() {
                                 <input
                                     type="radio"
                                     name="depositPaymentMethod"
-                                    value="e_wallet_vnpay_test"
-                                    checked={depositPaymentMethod === 'e_wallet_vnpay_test'}
+                                    value="e_wallet_momo_test"
+                                    checked={depositPaymentMethod === 'e_wallet_momo_test'}
                                     onChange={handleDepositPaymentMethodChange}
                                     className="h-5 w-5 text-green-600 border-gray-300 focus:ring-green-500"
                                 />
-                                <span className="ml-3 font-medium text-gray-700">E-Wallet (VNPay Test)</span>
+                                <span className="ml-3 font-medium text-gray-700">E-Wallet (Momo Test)</span>
                             </label>
                             <label className="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors duration-200">
                                 <input
@@ -1021,7 +1238,7 @@ export default function PrePurchasePage() {
                         <p className="text-sm font-semibold text-gray-800 mb-2">Purchase Agreement</p>
                         <div className="flex flex-col sm:flex-row justify-center gap-3">
                             <button
-                                onClick={handleViewContract} // Changed to handleViewContract
+                                onClick={handleViewContract}
                                 className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
                             >
                                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1057,16 +1274,16 @@ export default function PrePurchasePage() {
                             <span className="ml-3 font-medium text-gray-700">Bank Transfer</span>
                         </label>
                         <label className="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors duration-200">
-                                <input
-                                    type="radio"
-                                    name="paymentMethod"
-                                    value="e_wallet_vnpay_test"
-                                    checked={paymentMethod === 'e_wallet_vnpay_test'}
-                                    onChange={handlePaymentMethodChange}
-                                    className="h-5 w-5 text-purple-600 border-gray-300 focus:ring-purple-500"
-                                />
-                                <span className="ml-3 font-medium text-gray-700">E-Wallet (VNPay Test)</span>
-                            </label>
+                            <input
+                                type="radio"
+                                name="paymentMethod"
+                                value="e_wallet_momo_test"
+                                checked={paymentMethod === 'e_wallet_momo_test'}
+                                onChange={handlePaymentMethodChange}
+                                className="h-5 w-5 text-purple-600 border-gray-300 focus:ring-purple-500"
+                            />
+                            <span className="ml-3 font-medium text-gray-700">E-Wallet (Momo Test)</span>
+                        </label>
                         <label className="flex items-center p-4 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors duration-200">
                             <input
                                 type="radio"
@@ -1079,12 +1296,12 @@ export default function PrePurchasePage() {
                             <span className="ml-3 font-medium text-gray-700">Installment Plan</span>
                         </label>
                     </div>
-                    {!paymentMethod && ( // Only show warning if no full payment method selected
+                    {!paymentMethod && (
                         <div className="bg-red-50 border-l-4 border-red-500 p-3 rounded-lg mt-4">
                             <p className="text-red-800 text-sm font-medium">Please select a full payment method to proceed.</p>
                         </div>
                     )}
-                     <div className="mt-6 space-y-2">
+                    <div className="mt-6 space-y-2">
                         <h4 className="text-lg font-semibold text-gray-800 mb-3">Key Dates</h4>
                         <div className="flex justify-between items-center text-gray-700">
                             <span>Calculated Delivery Date:</span>
@@ -1093,7 +1310,7 @@ export default function PrePurchasePage() {
                         <div className="flex justify-between items-center text-gray-700">
                             <span>Payment Due Date:</span>
                             <span className="font-semibold">{paymentDueDate ? new Date(paymentDueDate).toLocaleDateString('en-US') : 'N/A'}</span>
-                            </div>
+                        </div>
                         {!deliveryDate && (
                             <div className="bg-red-50 border-l-4 border-red-500 p-3 rounded-lg mt-4">
                                 <p className="text-red-800 text-sm font-medium">Delivery date is not set. This is required to proceed with full payment.</p>
@@ -1103,7 +1320,6 @@ export default function PrePurchasePage() {
                 </div>
             )}
 
-            {/* Order Summary */}
             <div className="mt-8 p-6 bg-blue-50 rounded-xl border border-blue-200 shadow-lg">
                 <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
                     <svg className="w-6 h-6 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1152,12 +1368,8 @@ export default function PrePurchasePage() {
                     </div>
                 </div>
             </div>
-
-            {/* Removed hidden div for PDF generation */}
-
           </div>
 
-          {/* Fixed Action Buttons */}
           <div className="flex-shrink-0 flex flex-col sm:flex-row gap-3 p-6 pt-4 border-t border-gray-200/50 bg-white/80 backdrop-blur-sm rounded-b-2xl">
             <button
               onClick={() => navigate(-1)}
@@ -1218,7 +1430,6 @@ export default function PrePurchasePage() {
         </div>
       </div>
 
-      {/* Contract Viewer Modal */}
       {contractModal.open && (
         <ContractViewerModal
           content={contractModal.content}
@@ -1229,7 +1440,6 @@ export default function PrePurchasePage() {
   );
 }
 
-// Separate Modal component for reusability
 function Modal({ children, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
@@ -1246,7 +1456,6 @@ function Modal({ children, onClose }) {
   );
 }
 
-// New component for displaying the contract content in a modal
 function ContractViewerModal({ content, onClose }) {
   // Function to format the plain text content into a more structured HTML-like view
   const formatContractTextToHtml = (text) => {
