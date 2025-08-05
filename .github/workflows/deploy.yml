@@ -27,9 +27,18 @@ jobs:
     needs: build
     steps:
       - name: Deploy dist to VPS
+        shell: pwsh
         run: |
-          powershell -Command "
-            $passwd = ConvertTo-SecureString '${{ secrets.VPS_PASSWORD }}' -AsPlainText -Force;
-            $cred = New-Object System.Management.Automation.PSCredential ('${{ secrets.VPS_USERNAME }}', $passwd);
-            Copy-Item -Path './AutoSaleDN_FE/dist/*' -Destination '\\${{ secrets.VPS_HOST }}\${{ secrets.FRONTEND_DEPLOY_PATH }}' -Recurse -Credential $cred
-          "
+          $username = "${{ secrets.VPS_USERNAME }}"
+          $password = "${{ secrets.VPS_PASSWORD }}"
+          $host = "${{ secrets.VPS_HOST }}"
+          $deployPath = "${{ secrets.FRONTEND_DEPLOY_PATH }}"
+
+          $secure = ConvertTo-SecureString $password -AsPlainText -Force
+          $cred = New-Object System.Management.Automation.PSCredential ($username, $secure)
+
+          $source = "./AutoSaleDN_FE/dist/*"
+          $destination = "\\$host\$deployPath"
+
+          Write-Host "➡️ Copying files from '$source' to '$destination'..."
+          Copy-Item -Path $source -Destination $destination -Recurse -Credential $cred
