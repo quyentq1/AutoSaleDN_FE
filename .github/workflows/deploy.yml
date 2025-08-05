@@ -8,8 +8,28 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: Debug secrets usage
+      - name: Checkout source
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Vite app
+        run: npm run build
+
+  deploy:
+    runs-on: windows-latest
+    needs: build
+    steps:
+      - name: Deploy dist to VPS
         run: |
-          echo "Username: ${{ secrets.VPS_USERNAME }}"
-          echo "Host: ${{ secrets.VPS_HOST }}"
-          echo "Deploy path: ${{ secrets.FRONTEND_DEPLOY_PATH }}"
+          powershell -Command "
+            $passwd = ConvertTo-SecureString '${{ secrets.VPS_PASSWORD }}' -AsPlainText -Force;
+            $cred = New-Object System.Management.Automation.PSCredential ('${{ secrets.VPS_USERNAME }}', $passwd);
+            Copy-Item -Path './AutoSaleDN_FE/dist/*' -Destination '\\${{ secrets.VPS_HOST }}\${{ secrets.FRONTEND_DEPLOY_PATH }}' -Recurse -Credential $cred
+          "
