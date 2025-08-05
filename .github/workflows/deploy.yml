@@ -5,62 +5,51 @@ on:
     branches: [ main ]
 
 jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    
+  build:
+    runs-on: [self-hosted, Windows, X64]
     steps:
-    - name: Checkout source
-      uses: actions/checkout@v4
-      
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-        
-    - name: Install dependencies
-      run: npm install
-      
-    - name: Build Vite app
-      run: npm run build
-      
-    - name: Deploy to VPS via SSH
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.VPS_HOST }}
-        username: ${{ secrets.VPS_USERNAME }}
-        password: ${{ secrets.VPS_PASSWORD }}
-        # Hoặc sử dụng SSH key (khuyến nghị):
-        # key: ${{ secrets.VPS_SSH_KEY }}
-        script: |
-          # Backup thư mục cũ (nếu có)
-          if [ -d "${{ secrets.FRONTEND_DEPLOY_PATH }}" ]; then
-            sudo mv "${{ secrets.FRONTEND_DEPLOY_PATH }}" "${{ secrets.FRONTEND_DEPLOY_PATH }}.backup.$(date +%Y%m%d_%H%M%S)"
-          fi
-          
-          # Tạo thư mục deploy
-          sudo mkdir -p "${{ secrets.FRONTEND_DEPLOY_PATH }}"
-          sudo chown ${{ secrets.VPS_USERNAME }}:${{ secrets.VPS_USERNAME }} "${{ secrets.FRONTEND_DEPLOY_PATH }}"
-    
-    - name: Copy files to VPS
-      uses: appleboy/scp-action@v0.1.7
-      with:
-        host: ${{ secrets.VPS_HOST }}
-        username: ${{ secrets.VPS_USERNAME }}
-        password: ${{ secrets.VPS_PASSWORD }}
-        # Hoặc sử dụng SSH key:
-        # key: ${{ secrets.VPS_SSH_KEY }}
-        source: "./dist/*"
-        target: "${{ secrets.FRONTEND_DEPLOY_PATH }}"
-        strip_components: 1
-        
-    - name: Set permissions and restart services
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.VPS_HOST }}
-        username: ${{ secrets.VPS_USERNAME }}
-        password: ${{ secrets.VPS_PASSWORD }}
-        script: |
-          # Set quyền cho files
-          sudo chown -R www-data:www-data "${{ secrets.FRONTEND_DEPLOY_PATH }}"
-          sudo chmod -R 755 "${{ secrets.FRONTEND_DEPLOY_PATH }}"
+      - name: Checkout source
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests 🧪
+        run: npm test
+
+      - name: Build Vite app
+        run: npm run build
+
+  deploy:
+    runs-on: [self-hosted, Windows, X64]
+    needs: build
+    steps:
+      - name: Checkout source (for dist folder)
+        uses: actions/checkout@v3
+
+      - name: Deploy dist to VPS
+        shell: pwsh
+        run: |
+          $source = "./dist/*"
+          $destination = "${{ secrets.FRONTEND_DEPLOY_PATH }}"
+
+          # Đảm bảo thư mục đích tồn tại
+          if (-not (Test-Path -Path $destination)) {
+              New-Item -ItemType Directory -Path $destination -Force
+              Write-Host "➡️ Created destination directory at '$destination'."
+          }
+
+          Write-Host "➡️ Copying files from '$source' to '$destination'..."
+          Copy-Item -Path $source -Destination $destination -Recurse -Force
+
+          if (Test-Path $destination) {
+              Write-Host "✅ Files copied successfully to '$destination'!"
+          } else {
+              Write-Error "❌ Destination not found. Something went wrong during copy."
+              exit 1
+          }
