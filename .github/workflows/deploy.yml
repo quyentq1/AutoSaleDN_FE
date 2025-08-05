@@ -16,14 +16,14 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Debug folder contents
-        run: dir ./AutoSaleDN_FE
-
       - name: Install dependencies
-        run: npm install --prefix ./AutoSaleDN_FE
+        run: npm install
+
+      - name: Run tests 🧪
+        run: npm test
 
       - name: Build Vite app
-        run: npm run build --prefix ./AutoSaleDN_FE
+        run: npm run build
 
   deploy:
     runs-on: windows-latest
