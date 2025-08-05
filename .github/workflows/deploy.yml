@@ -1,0 +1,35 @@
+name: Deploy React Frontend
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install --prefix ./AutoSaleDN_FE
+
+      - name: Build React app
+        run: npm run build --prefix ./AutoSaleDN_FE
+
+  deploy:
+    runs-on: windows-latest
+    needs: build
+    steps:
+      - name: Deploy to VPS
+        run: |
+          powershell -Command "
+            $passwd = ConvertTo-SecureString '${{ secrets.VPS_PASSWORD }}' -AsPlainText -Force;
+            $cred = New-Object System.Management.Automation.PSCredential ('${{ secrets.VPS_USERNAME }}', $passwd);
+            Copy-Item -Path './FrontendProject/build/*' -Destination '\\${{ secrets.VPS_HOST }}\${{ secrets.FRONTEND_DEPLOY_PATH }}' -Recurse -Credential $cred
+          "
