@@ -34,17 +34,33 @@ jobs:
           $remoteHost = "${{ secrets.VPS_HOST }}"
           $deployPath = "${{ secrets.FRONTEND_DEPLOY_PATH }}"
 
+          # 1. Tạo một đối tượng credential an toàn
           $secure = ConvertTo-SecureString $password -AsPlainText -Force
           $cred = New-Object System.Management.Automation.PSCredential ($username, $secure)
 
+          # 2. Tạo một ổ đĩa mạng tạm thời bằng New-PSDrive
+          Write-Host "➡️ Mapping network drive to $remoteHost..."
+          try {
+              New-PSDrive -Name "VpsDrive" -PSProvider FileSystem -Root "\\$remoteHost\$deployPath" -Credential $cred -Persist
+          }
+          catch {
+              Write-Error "❌ Failed to map network drive. Error: $_"
+              exit 1
+          }
+
+          # 3. Sao chép file vào ổ đĩa đã tạo
           $source = "./AutoSaleDN_FE/dist/*"
-          $destination = "\\$remoteHost\$deployPath"
+          $destination = "VpsDrive:\"
 
           Write-Host "➡️ Copying files from '$source' to '$destination'..."
-          Copy-Item -Path $source -Destination $destination -Recurse -Credential $cred
+          Copy-Item -Path $source -Destination $destination -Recurse
 
+          # 4. Kiểm tra và dọn dẹp (xóa ổ đĩa mạng)
           if (Test-Path $destination) {
-            Write-Host "✅ Files copied successfully!"
+              Write-Host "✅ Files copied successfully!"
+              Remove-PSDrive -Name "VpsDrive"
           } else {
-            Write-Error "❌ Destination not found."
+              Write-Error "❌ Destination not found. Something went wrong during copy."
+              Remove-PSDrive -Name "VpsDrive"
+              exit 1
           }
