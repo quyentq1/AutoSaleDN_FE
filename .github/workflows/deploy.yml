@@ -31,14 +31,20 @@ jobs:
         run: |
           $username = "${{ secrets.VPS_USERNAME }}"
           $password = "${{ secrets.VPS_PASSWORD }}"
-          $host = "${{ secrets.VPS_HOST }}"
+          $remoteHost = "${{ secrets.VPS_HOST }}"
           $deployPath = "${{ secrets.FRONTEND_DEPLOY_PATH }}"
 
           $secure = ConvertTo-SecureString $password -AsPlainText -Force
           $cred = New-Object System.Management.Automation.PSCredential ($username, $secure)
 
           $source = "./AutoSaleDN_FE/dist/*"
-          $destination = "\\$host\$deployPath"
+          $destination = "\\$remoteHost\$deployPath"
 
           Write-Host "➡️ Copying files from '$source' to '$destination'..."
           Copy-Item -Path $source -Destination $destination -Recurse -Credential $cred
+
+          if (Test-Path $destination) {
+            Write-Host "✅ Files copied successfully!"
+          } else {
+            Write-Error "❌ Destination not found."
+          }
