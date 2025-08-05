@@ -1,14 +1,16 @@
-name: Deploy React Frontend (Vite)
+name: Deploy to Windows VPS
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
-  build:
-    runs-on: [self-hosted, Windows, X64]
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout source
+      - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Setup Node.js
@@ -19,35 +21,26 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-
-      - name: Build Vite app
+      - name: Build project
         run: npm run build
 
-  deploy:
-    runs-on: [self-hosted, Windows, X64]
-    needs: build
-    steps:
-      - name: Checkout source (for dist folder)
-        uses: actions/checkout@v3
+      - name: Copy files to VPS via SCP (password)
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: 22
+          source: "build/*"
+          target: ${{ secrets.FRONTEND_DEPLOY_PATH }}
 
-      - name: Deploy dist to VPS
-        shell: pwsh
-        run: |
-          $source = "./dist/*"
-          $destination = "${{ secrets.FRONTEND_DEPLOY_PATH }}"
-
-          # Đảm bảo thư mục đích tồn tại
-          if (-not (Test-Path -Path $destination)) {
-              New-Item -ItemType Directory -Path $destination -Force
-              Write-Host "➡️ Created destination directory at '$destination'."
-          }
-
-          Write-Host "➡️ Copying files from '$source' to '$destination'..."
-          Copy-Item -Path $source -Destination $destination -Recurse -Force
-
-          if (Test-Path $destination) {
-              Write-Host "✅ Files copied successfully to '$destination'!"
-          } else {
-              Write-Error "❌ Destination not found. Something went wrong during copy."
-              exit 1
-          }
+      - name: Execute remote command (restart app)
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: 22
+          script: |
+            # Ví dụ: restart IIS hoặc node app
+            # iisreset
