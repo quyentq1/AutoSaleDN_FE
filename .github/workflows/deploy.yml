@@ -19,7 +19,6 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-
       - name: Build Vite app
         run: npm run build
 
@@ -30,7 +29,7 @@ jobs:
       - name: Deploy dist to VPS
         run: |
           powershell -Command "
-          $passwd = ConvertTo-SecureString '${{ secrets.VPS_PASSWORD }}' -AsPlainText -Force;
-          $cred = New-Object System.Management.Automation.PSCredential ('${{ secrets.VPS_USERNAME }}', $passwd);
-          Copy-Item -Path './AutoSaleDN_FE/dist/*' -Destination '\\${{ secrets.VPS_HOST }}\${{ secrets.FRONTEND_DEPLOY_PATH }}' -Recurse -Credential $cred
-        "
+            $passwd = ConvertTo-SecureString '${{ secrets.VPS_PASSWORD }}' -AsPlainText -Force;
+            $cred = New-Object System.Management.Automation.PSCredential ('${{ secrets.VPS_USERNAME }}', $passwd);
+            Copy-Item -Path './AutoSaleDN_FE/dist/*' -Destination '\\${{ secrets.VPS_HOST }}\${{ secrets.FRONTEND_DEPLOY_PATH }}' -Recurse -Credential $cred
+          "
