@@ -481,7 +481,7 @@ export default function SellerDashboard() {
                     <div className="flex-shrink-0">
                       <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-200">
                         <img
-                          src={car.imageUrl || '/api/placeholder/64/64'}
+                          src={car.imageUrl || `${API_BASE}/api/placeholder/64/64`}
                           alt={car.modelName}
                           className="w-full h-full object-cover"
                           onError={(e) => {
