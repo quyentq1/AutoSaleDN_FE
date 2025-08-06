@@ -27,6 +27,7 @@ jobs:
 
       - name: Clean npm cache
         run: npm cache clean --force
+
       - name: Install dependencies
         run: npm install
 
@@ -38,38 +39,38 @@ jobs:
         run: echo "build-path=dist" >> $GITHUB_OUTPUT
 
       - name: Upload build artifacts
-        uses: action/upload-artifact@v3
+        uses: actions/upload-artifact@v3
         with:
           name: build-dist
           path: dist/
 
-deploy:
-  needs: build
-  runs-on: ubuntu-lastest
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest  # Sửa lỗi chính tả: "ubuntu-lastest" → "ubuntu-latest"
 
-  steps:
-    - name: Download build artifacts
-      uses: actions/download-artifact@v3
-      with:
-        name: build-dist
-        path: dist
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: build-dist
+          path: dist
 
-    - name: Copy files to VPS via SCP (password)
-      uses: appleboy/scp-action@master
-      with:
-        host: ${{ secrets.VPS_HOST }}
-        username: ${{ secrets.VPS_USERNAME }}
-        password: ${{ secrets.VPS_PASSWORD }}
-        port: 22
-        source: "dist/*"
-        target: "C:/inetpub/wwwroot/ReactApp/" 
+      - name: Copy files to VPS via SCP (password)
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: 22
+          source: "dist/*"
+          target: "C:/inetpub/wwwroot/ReactApp/"
 
-    - name: Execute remote command (restart app)
-      uses: appleboy/ssh-action@master
-      with:
-        host: ${{ secrets.VPS_HOST }}
-        username: ${{ secrets.VPS_USERNAME }}
-        password: ${{ secrets.VPS_PASSWORD }}
-        port: 22
-        script: |
+      - name: Execute remote command (restart app)
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: 22
+          script: |
             iisreset
